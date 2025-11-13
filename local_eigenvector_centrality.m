@@ -1,166 +1,176 @@
-function [centrality] = local_eigenvector_centrality(A, X, plotall, Imax)
-% local_eigenvector_centrality
-% Computes and plots local eigenvector centrality of adjacency matrix A.
+function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Imax)
+% LOCAL_EIGENVECTOR_CENTRALITY
+% Computes local eigenvector centrality of an adjacency matrix A.
 %
 % Usage:
 %   centrality = local_eigenvector_centrality(A)
 %   centrality = local_eigenvector_centrality(A, X, plotall)
 %   centrality = local_eigenvector_centrality(A, X, plotall, Imax)
 %
-% If Imax is not provided, it is determined automatically from the eigengap.
+% Inputs:
+%   A       - Adjacency matrix (sparse or full)
+%   X       - (optional) Node coordinates [n x 2] for plotting
+%   plotall - (optional) If true, generate plots via helper function
+%   Imax    - (optional) Maximum number of eigenvectors to include
+%
+% Outputs:
+%   centrality - Local eigenvector centrality values
+%   details    - Struct containing eigenvalues, eigenvectors, eigengap,
+%                and global eigenvector centrality for analysis/plotting
+%
+% Reference:
+%   [Author(s)], "A Local Eigenvector Centrality", [Journal, Year].
 
-    % Check if A is sparse
+    if nargin < 2, X = []; end
+    if nargin < 3, plotall = false; end
+
+    % === Eigen decomposition ===
     if issparse(A)
-        [V, D] = eigs(A, 50, 'largestreal');  % Compute up to 34 eigenvalues/eigenvectors
+        [V, D] = eigs(A, 50, 'largestreal');
     else
         [V, D] = eig(A);
     end
-    
-    % Extract and sort eigenvalues in descending order
-    [Dsort, idx] = sort(real(diag(D)), 'descend'); 
+
+    % Sort eigenvalues and eigenvectors
+    [Dsort, idx] = sort(real(diag(D)), 'descend');
     V = V(:, idx);
 
-    % Handle possible complex conjugate eigenvectors
-    Diff_Dsort = diff(real(Dsort));
-    CC_I = find(Diff_Dsort == 0);
-    for i = 1:length(CC_I)
-        if imag(D(idx(CC_I(i)), idx(CC_I(i)))) > 0
-            V(:, CC_I(i))   = real(V(:, CC_I(i)));
-            V(:, CC_I(i)+1) = imag(V(:, CC_I(i)+1));
-        end
-    end
-
     % Remove zero eigenvalue components
-    zero_eig = find(Dsort == 0);
-    for i = 1:length(zero_eig)
-        V(:, zero_eig(i)) = zeros(1, length(V(:,1)));
-    end
+    zero_eig = (Dsort == 0);
+    V(:, zero_eig) = 0;
 
     % Compute eigengap
     eigengap = Dsort(1:end-1) - Dsort(2:end);
-    
+
     % === Determine Imax ===
     if nargin < 4 || isempty(Imax)
         [~, Imax] = max(eigengap);
         fprintf('Imax not provided — using largest eigengap at index %d.\n', Imax);
     else
-        Imax = min(Imax, length(Dsort)); % safety check
+        Imax = min(Imax, length(Dsort));
         fprintf('Using user-provided Imax = %d.\n', Imax);
     end
 
-    if plotall == 1
-        % === Plot eigenvalues ===
-        figure;
-        plot(Dsort(:), '-o');
-        ylabel('Eigenvalues');
-        xlabel('Index');
-        title('Sorted Eigenvalues');
-    
-        % === Plot eigengap ===
-        figure;
-        plot(eigengap, 'k-o');
-        xlabel('$i$', 'Interpreter', 'latex', 'FontSize', 14);
-        ylabel('${\lambda}_i - {\lambda}_{i+1}$', 'Interpreter', 'latex', 'FontSize', 14);
-        title('Eigengap Spectrum');
-        box off;
-    end
-
-    % === Compute centrality ===
+    % === Compute Local Centrality ===
     secondIMaxPeak = 0;
-    centrality = vecnorm((V(:, secondIMaxPeak + 1:Imax)), 2, 2);
+    centrality = vecnorm(V(:, secondIMaxPeak + 1:Imax), 2, 2);
+    centrality = real(centrality);
+    centrality(centrality <= 0) = eps;
 
-    % === Create graph ===
+    % === Global Centrality for Comparison ===
+    global_centrality = abs(real(V(:, 1)));
+    global_centrality(global_centrality <= 0) = eps;
+
+    % === Package Results ===
+    details = struct( ...
+        'V', V, ...
+        'D', Dsort, ...
+        'eigengap', eigengap, ...
+        'Imax', Imax, ...
+        'global_centrality', global_centrality, ...
+        'X', X, ...
+        'A', A);
+
+    % === Optional Visualization ===
+    if plotall
+        plot_local_eigenvector_centrality(details, centrality);
+    end
+end
+
+function plot_local_eigenvector_centrality(details, local_centrality)
+% PLOT_LOCAL_EIGENVECTOR_CENTRALITY
+% Generates diagnostic plots for local vs global eigenvector centrality.
+%
+% Inputs:
+%   details         - Struct from local_eigenvector_centrality()
+%   local_centrality - Vector of local eigenvector centrality values
+
+    A = details.A;
+    X = details.X;
+    V = details.V;
+    D = details.D;
+    eigengap = details.eigengap;
+    Imax = details.Imax;
+    global_centrality = details.global_centrality;
+
     G = digraph(A);
 
-    % For color scaling
-    cmax = max(max(V(:, secondIMaxPeak + 1:Imax)));
-    cmin = min(min(V(:, secondIMaxPeak + 1:Imax)));
+    % === Eigenvalue Spectrum ===
+    figure; plot(D, '-o');
+    ylabel('Eigenvalue'); xlabel('Index');
+    title('Sorted Eigenvalues'); box off;
+
+    figure; plot(eigengap, 'k-o');
+    xlabel('i'); ylabel('\lambda_i - \lambda_{i+1}');
+    title('Eigengap Spectrum'); box off;
+
+    % === Plot eigenvectors up to Imax ===
+    cmax = max(max(V(:, 1:Imax)));
+    cmin = min(min(V(:, 1:Imax)));
     cabs = max([cmax, abs(cmin)]);
 
-    % === Plot each eigenvector if requested ===
-    if plotall == 1
-        for i = 1:Imax
-            figure;
-            an_eigenvector = real(V(:,i));
-            an_eigenvector(an_eigenvector == 0) = 0.00001;
-        
-            % Layout handling
-            if nargin < 2 || isempty(X)
-                p = plot(G, 'Layout', 'force', ...
-                    'MarkerSize', (abs(an_eigenvector) ./ sum(abs(an_eigenvector))) * 50, ...
-                    'NodeCData', an_eigenvector, 'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            else
-                p = plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
-                    'MarkerSize', (abs(an_eigenvector) ./ sum(abs(an_eigenvector))) * 50, ...
-                    'NodeCData', an_eigenvector, 'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            end
+    for i = 1:Imax
+        figure;
+        ev = real(V(:, i));
+        ev(ev == 0) = eps;
 
-            colormap(flip(summer));
-            cb = colorbar;
-            caxis([min(-cabs) max(cabs)]);
-            ylabel(cb, sprintf('v_{%d}', i), 'FontSize', 12, 'Rotation', 270);
-            axis off;
+        if isempty(X)
+            p = plot(G, 'Layout', 'force', ...
+                'MarkerSize', (abs(ev) ./ sum(abs(ev))) * 100, ...
+                'NodeCData', ev, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]);
+        else
+            p = plot(G, 'XData', X(:, 1), 'YData', X(:, 2), ...
+                'MarkerSize', (abs(ev) ./ sum(abs(ev))) * 100, ...
+                'NodeCData', ev, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]);
         end
+
+        colormap(flip(summer));
+        colorbar; caxis([-cabs cabs]);
+        title(sprintf('Eigenvector %d', i)); axis off;
     end
 
-    % === Global vs Local Eigenvector Centrality ===
-    global_centrality = real(V(:,1));
-    global_centrality(global_centrality <= 0) = 0.00001;
-    centrality(centrality == 0) = 0.00001;
-    labels_toplot = {'Eigenvector centrality','Local eigenvector centrality'};
-    values = {global_centrality, centrality};
+    % === Compare Global vs Local Centrality ===
+    values = {global_centrality, local_centrality};
+    labels = {'Global Eigenvector Centrality', 'Local Eigenvector Centrality'};
 
-    if plotall == 1
-        for i = 1:length(values)
-            values{i} = values{i} ./ norm(values{i});
-            figure;
-    
-            if nargin < 2 || isempty(X)
-                p = plot(G, 'Layout', 'force', ...
-                    'MarkerSize', (values{i} ./ sum(values{i})) * 250, ...
-                    'NodeCData', values{i}, 'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            else
-                p = plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
-                    'MarkerSize', (values{i} ./ sum(values{i})) * 250, ...
-                    'NodeCData', values{i}, 'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            end
-            
-            colormap(autumn);
-            cb = colorbar;
-            ylabel(cb, labels_toplot{i}, 'FontSize', 12, 'Rotation', 270);
-            axis off;
-        end
+    for i = 1:numel(values)
+        v = values{i} ./ norm(values{i});
 
-    % === Compare local vs global ===
-        v1 = (global_centrality) ./ sum(global_centrality);
-        vc = (centrality) ./ sum(centrality);
-
-        neg = v1 - vc;
-        pos = vc - v1;
-        neg(neg <= 0) = 0.00001;
-        pos(pos <= 0) = 0.00001;
 
         figure;
-        if nargin < 2 || isempty(X)
-            p = plot(G, 'Layout', 'force', ...
-                'MarkerSize', pos * 500, 'NodeColor', [1 0 0], ...
-                'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            hold on
+        if isempty(X)
             plot(G, 'Layout', 'force', ...
-                'MarkerSize', neg * 500, 'NodeColor', [0 0 1], ...
-                'EdgeAlpha', 0, 'EdgeColor', [0 0 0]);
+                'MarkerSize', (abs(v) ./ sum(abs(v))) * 100, ...
+                'NodeCData', v, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]);
         else
-            p = plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
-                'MarkerSize', pos * 500, 'NodeColor', [1 0 0], ...
-                'EdgeAlpha', 0.1, 'EdgeColor', [0 0 0]);
-            hold on
             plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
-                'MarkerSize', neg * 500, 'NodeColor', [0 0 1], ...
-                'EdgeAlpha', 0, 'EdgeColor', [0 0 0]);
+                'MarkerSize', (abs(v) ./ sum(abs(v))) * 100, ...
+                'NodeCData', v, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]);
         end
-        
-        legend('positive','negative');
-        title('Difference Between Global and Local Centrality');
+        colormap(autumn); colorbar; title(labels{i});
         axis off;
     end
+
+    % === Difference Map ===
+    v1 = global_centrality ./ sum(global_centrality);
+    vc = local_centrality ./ sum(local_centrality);
+    pos = max(vc - v1, 1e-6);
+    neg = max(v1 - vc, 1e-6);
+
+    figure;
+    if isempty(X)
+        plot(G, 'Layout', 'force', 'MarkerSize', (abs(pos) ./ sum(abs(pos))) * 100, ...
+             'NodeColor', [1 0 0], 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]); hold on;
+        plot(G, 'Layout', 'force', 'MarkerSize', (abs(neg) ./ sum(abs(neg))) * 100, ...
+             'NodeColor', [0 0 1], 'EdgeAlpha', 0, 'EdgeColor', [0,0,0]);
+    else
+        plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
+             'MarkerSize', (abs(pos) ./ sum(abs(pos))) * 100, 'NodeColor', [1 0 0], 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0]); hold on;
+        plot(G, 'XData', X(:,1), 'YData', X(:,2), ...
+             'MarkerSize', (abs(neg) ./ sum(abs(neg))) * 100, 'NodeColor', [0 0 1], 'EdgeAlpha', 0, 'EdgeColor', [0,0,0]);
+    end
+
+    legend('Local > Global', 'Global > Local');
+    title('Difference Between Global and Local Centrality');
+    axis off;
 end
