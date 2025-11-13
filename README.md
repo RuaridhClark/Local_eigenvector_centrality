@@ -8,24 +8,23 @@ The paper introduces a **new centrality metric** that extends traditional eigenv
 
 ## Repository Structure
 
-`High School contacts/              # Example contact networks for a high school (MATLAB format)`
+| Folder / File                     | Description |
+|----------------------------------|-------------|
+| `High School contacts/`           | Example contact networks for a high school (MATLAB format) |
+| `Primary School contacts/`        | Example contact networks for a primary school (MATLAB format) |
+| `Road network/`                   | Example road network dataset (Google Colab notebook) |
+| `local_eigenvector_centrality.m`  | MATLAB function to compute local eigenvector centrality |
 
-`Primary School contacts/           # Example contact networks for a primary school (MATLAB format)`
-
-`Road network/                      # Example road network dataset (Google Colab notebook)`
-
-`local_eigenvector_centrality.m     # MATLAB function to compute local eigenvector centrality`
-
-- **High School contact networks** from:  
+**High School contact networks** from:  
   J. Stehlé, N. Voirin, A. Barrat, C. Cattuto, L. Isella, J.-F. Pinton, W. Q. Marco, V. den Broeck,  
   C. Régis, P. L. Bruno, and Vanhems. *High-resolution measurements of face-to-face contact patterns in a primary school*.  
   **PLOS ONE, 6:e23176, 2011.**  
 
-- **Primary School contact networks** from:  
+**Primary School contact networks** from:  
   R. Mastrandrea, J. Fournet, and A. Barrat. *Contact patterns in a high school: A comparison between data collected using wearable sensors, contact diaries and friendship surveys.*  
   **PLOS ONE, 10:1–26, 2015.**  
 
-- The road network example call Open Street Maps and is implemented in a Jupyter notebook (`.ipynb`) for Google Colab
+The road network example call Open Street Maps and is implemented in a Jupyter notebook (`.ipynb`) for Google Colab
 
 ---
 
