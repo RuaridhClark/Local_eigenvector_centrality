@@ -40,7 +40,7 @@ Computes the **local eigenvector centrality** of a network adjacency matrix.
 centrality = local_eigenvector_centrality(A);
 
 % Advanced usage with plotting and options
-centrality = local_eigenvector_centrality(A, X, plotall, Imax);
+[centrality, details] = local_eigenvector_centrality(A, X, plotall, Imax);
 ```
 
 ### Inputs
@@ -57,10 +57,5 @@ Imax — (optional) Identified prominent eigengap
 ```
 centrality — Local eigenvector centrality values
 
-details — Struct containing:
-
-Eigenvalues, eigenvectors
-
-Eigengap
-
-Global eigenvector centrality for comparison and plotting
+details    - Struct containing eigenvalues, eigenvectors, eigengap, and global eigenvector centrality for analysis/plotting
+```
