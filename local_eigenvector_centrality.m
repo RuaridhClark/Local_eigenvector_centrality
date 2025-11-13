@@ -17,9 +17,6 @@ function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Ima
 %   centrality - Local eigenvector centrality values
 %   details    - Struct containing eigenvalues, eigenvectors, eigengap,
 %                and global eigenvector centrality for analysis/plotting
-%
-% Reference:
-%   [Author(s)], "A Local Eigenvector Centrality", [Journal, Year].
 
     if nargin < 2, X = []; end
     if nargin < 3, plotall = false; end
