@@ -4,6 +4,9 @@
 % Usage: run this script from its folder. It will load the GEXF file,
 % compute centralities, and produce plots corresponding with the paper.
 
+%%% NEW PLAN %%% Correlate with metrics on the nodes not just between
+%%% centrality measures
+
 %% Configuration
 clear; clc; close all;
 
@@ -32,12 +35,32 @@ G_dense = graph(A_dense);
 
 %% Generate (clustered) node positions for plotting
 fprintf('\n--- Generating node positions (clustered by class/year) ---\n');
-[nodeIDs_pos, positions_table] = gexf_create_positions(gexfFile, nodeIDs_nonzero);
+[nodeIDs_pos, positions_table,TIdx] = gexf_create_positions(gexfFile, nodeIDs_nonzero);
 Pos = positions_table{:, {'X', 'Y', 'Z'}};    % Nx3 numeric
 
 %% Create class-separated adjacency matrices
 fprintf('\n--- Building class adjacency matrices ---\n');
 [A_classes, nodeIDs_class] = gexf_to_class_adjacency(gexfFile);
+
+% % % Scale weights for A_dense for nodeIDs_class.Class_2A
+% [~, idxClass2A] = ismember(nodeIDs_class.class_2A, nodeIDs_nonzero);
+% idxClass2A(idxClass2A == 0) = [];
+% A_dense(idxClass2A, idxClass2A) = 1.5 * A_dense(idxClass2A, idxClass2A);
+
+% classesToScale = {'class_1A', 'class_4A', 'class_4B'};
+% scaleFactors = [2, 2, 2];
+% for i = 1:numel(classesToScale)
+% 
+%     className = classesToScale{i};
+% 
+%     % Map node IDs to indices in the reduced matrix
+%     [~, idxClass] = ismember(nodeIDs_class.(className), nodeIDs_nonzero);
+%     idxClass(idxClass == 0) = [];
+% 
+%     % Scale only within-class connections
+%     A_dense(idxClass, idxClass) = ...
+%         scaleFactors(i) * A_dense(idxClass, idxClass);
+% end
 
 %% Compute PageRank centrality (for comparison)
 fprintf('\n--- Computing PageRank centrality ---\n');
@@ -49,19 +72,25 @@ end
 
 %% Compute local eigenvector centrality for whole dense network (example Imax choices)
 fprintf('\n--- Computing local eigenvector centralities (Imax = 5 and 10) ---\n');
-[local_centrality_5,  ~] = local_eigenvector_centrality(A_dense, Pos, false, 5);
-[local_centrality_10, ~] = local_eigenvector_centrality(A_dense, Pos, false, 10);
+[EC,  ~] = local_eigenvector_centrality(A_dense, Pos, true, 1);
+close([1,3,4,5,6])
+[LEC_5,  ~] = local_eigenvector_centrality(A_dense, Pos, false, 5);
+[LEC_10, ~] = local_eigenvector_centrality(A_dense, Pos, false, 10);
 
 %% Plot PageRank and Local centrality maps coloured by class
 fprintf('\n--- Plotting centrality maps ---\n');
-plot_centrality_colourvary(A_dense, PRank_centrality, Pos, nodeIDs_nonzero, 15, metaFile);
-title('PageRank'); axis equal;
 
-plot_centrality_colourvary_years(A_dense, local_centrality_5, Pos, nodeIDs_nonzero, 20, metaFile);
+plot_centrality_colourvary_years(A_dense, EC, Pos, nodeIDs_nonzero, 20, metaFile);
+title('Global'); axis equal;
+
+plot_centrality_colourvary_years(A_dense, LEC_5, Pos, nodeIDs_nonzero, 20, metaFile);
 title('Local (i=5)'); axis equal;
 
-plot_centrality_colourvary(A_dense, local_centrality_10, Pos, nodeIDs_nonzero, 20, metaFile);
+plot_centrality_colourvary(A_dense, LEC_10, Pos, nodeIDs_nonzero, 20, metaFile);
 title('Local (i=10)'); axis equal;
+
+plot_centrality_colourvary(A_dense, PRank_centrality, Pos, nodeIDs_nonzero, 15, metaFile);
+title('PageRank'); axis equal;
 
 %% Compute class-level centralities and assemble ordered vector
 fprintf('\n--- Computing class-level centralities (per-class local centrality) ---\n');
@@ -77,8 +106,8 @@ for k = 1:numClass
     if k < numClass
         % Compute class-level local centrality (Imax = 1 -> principal eigenvector of class subgraph)
         [class_centrality, ~] = local_eigenvector_centrality(A_class, [], false, 1);
-    else % Teachers nodes given local_centrality_10 values
-        class_centrality = local_centrality_10(ismember(nodeIDs_nonzero,nodeIDs_class.class_Teachers));
+    else % Teachers nodes given LEC_10 values
+        class_centrality = LEC_10(ismember(nodeIDs_nonzero,nodeIDs_class.class_Teachers));
     end
 
     % Store results (NodeID order corresponds to ids_1class)
@@ -86,99 +115,367 @@ for k = 1:numClass
     allCentralityData = [allCentralityData; T];
 end
 
-% Ensure Teacher nodes present: use local_centrality_10 values for missing teacher indices
-% Map nodeIDs_nonzero to their centrality entries (fallback to local_centrality_10)
+% for each class in struct nodeIDs_class report the total edge weight 
+% Compute total edge weight for each class
+classEdgeWeights = struct();
+% Compute total edge weight for each class
+for k = 1:numel(classList)
+    classStructname = classList(k);
+    A_class = A_classes.(classStructname);
+    classEdgeWeights.(classStructname) = sum(A_class(:));
+end
+classEdgeWeights
+
+% Ensure Teacher nodes present: use LEC_10 values for missing teacher indices
+% Map nodeIDs_nonzero to their centrality entries (fallback to LEC_10)
 [commonIdx, ia, ib] = intersect(nodeIDs_nonzero, allCentralityData.NodeID, 'stable');
-orderedCentrality = zeros(size(nodeIDs_nonzero));
+KCEC = zeros(size(nodeIDs_nonzero));
 
 % Fill known entries
 if ~isempty(commonIdx)
-    orderedCentrality(ia) = allCentralityData.Centrality(ib);
+    KCEC(ia) = allCentralityData.Centrality(ib);
 end
 
 % Final plot of class-based centrality
-plot_centrality_colourvary(A_dense, orderedCentrality, Pos, nodeIDs_nonzero, 15, metaFile);
+plot_centrality_colourvary(A_dense, KCEC, Pos, nodeIDs_nonzero, 15, metaFile);
 title('Class (per-class centrality)'); axis equal;
 
-%% Boxplot comparisons (Local vs PageRank vs Class)
-fprintf('\n--- Boxplot and distance comparison ---\n');
-% Normalise using median & MAD (robust)
-Local_norm = (local_centrality_10 - median(local_centrality_10)) / mad(local_centrality_10, 1);
-PR_norm    = (PRank_centrality - median(PRank_centrality)) / mad(PRank_centrality, 1);
-Class_norm = (orderedCentrality - median(orderedCentrality)) / mad(orderedCentrality, 1);
+%% Area plot
+%% --- Normalization & difference vectors ---
+% EC_norm = (EC - median(EC)) / mad(EC, 1);
+% LEC_norm = (LEC_10 - median(LEC_10)) / mad(LEC_10, 1);
+% PR_norm = (PRank_centrality - median(PRank_centrality)) / mad(PRank_centrality, 1);
+% KCEC_norm = (KCEC - median(KCEC)) / mad(KCEC, 1);
 
-% Remove teacher indices if necessary (find from metadata)
-meta = readtable(metaFile, 'Delimiter', '\t', 'ReadVariableNames', false);
-meta.Properties.VariableNames = {'ID','Class','Gender'};
-meta.ID = string(meta.ID);
-Tmask = startsWith(string(positions_table.Class), 'Teachers');
-TIdx = find(Tmask);
+normalize_vec = @(x) x(:)./max(x);
 
-validIdx = setdiff(1:length(Local_norm), TIdx);
-Local_valid = Local_norm(validIdx)';
-PR_valid    = PR_norm(validIdx)';
-Class_valid = Class_norm(validIdx)';
+EC_norm = normalize_vec(EC);
+PR_norm = normalize_vec(PRank_centrality);
+LEC_norm = normalize_vec(LEC_10);
+KCEC_norm = normalize_vec(KCEC);
 
-% Sort by Local for plotting
-[Local_sorted, sidx] = sort(Local_valid);
-PR_sorted    = PR_valid(sidx);
-Class_sorted = Class_valid(sidx);
+validIdx = setdiff(1:length(LEC_norm), TIdx);
 
-% Figure layout
-figure; %('Units','normalized','Position',[0.05 0.05 0.9 0.7])
+Local_valid = LEC_norm(validIdx);
+PR_valid = PR_norm(validIdx);
+KCEC_valid = KCEC_norm(validIdx);
 
-t = tiledlayout(1,9, 'TileSpacing', 'compact', 'Padding', 'compact');
+diff_KCEC = Local_valid - KCEC_valid;
+diff_PRank = Local_valid - PR_valid;
 
-% Difference area plots on left
-nexttile(1,[1 6]); hold on;
-x = 1:numel(Local_sorted);
+[~, sortIdx] = sort(Local_valid);
+Local_sorted = Local_valid(sortIdx);
+PR_sorted = PR_valid(sortIdx);
+Class_sorted = KCEC_valid(sortIdx);
+x = (1:length(Local_sorted))';
 
-% Area between Local and Class
-X_fill = [x, fliplr(x)];
-Y_fill = [Local_sorted, fliplr(Class_sorted)];
-fill(X_fill, Y_fill, [0 0.4470 0.7410], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
+area_plot(Local_sorted,Class_sorted,Local_sorted,PR_sorted,"LEC","KCEC","LEC","PageRank")
 
-% Area between Local and PageRank
-Y_fill = [Local_sorted, fliplr(PR_sorted)];
-fill(X_fill, Y_fill, [0.8500 0.3250 0.0980], 'FaceAlpha', 0.3, 'EdgeColor', 'none');
-
-legend('Local − Class area','Local − PageRank area','Location','northwest');
-ylabel('Normalised Centrality'); xlabel('Sorted Index');
-box off; axis tight;
-
-% Boxcharts on right
+% --- Boxplots ---
 nexttile(7,[1 3]); hold on;
-% Differences
-diff_vec_class  = Local_valid - Class_valid;
-diff_vec_PRank  = Local_valid - PR_valid;
-all_sets = [diff_vec_class(:); diff_vec_PRank(:)];
-grps = [repmat({'Local − Class'}, numel(diff_vec_class), 1);
-        repmat({'Local − PageRank'}, numel(diff_vec_PRank), 1)];
+all_sets = [diff_KCEC; diff_PRank];
+grps = [repmat({'LEC − KCEC'}, numel(diff_KCEC), 1);
+        repmat({'LEC − PageRank'}, numel(diff_PRank), 1)];
 
-uniqueGroups = unique(grps, 'stable');
-colors = [0 0.4470 0.7410; 0.8500 0.3250 0.0980];
-for i = 1:numel(uniqueGroups)
+uniqueGroups = unique(grps, 'stable'); numGroups = numel(uniqueGroups);
+positions = 1:numGroups;
+
+colors = [0,0.4470,0.7410; 0.8500,0.3250,0.0980];
+alpha = 0.3; lighterColors = colors + (1 - colors)*alpha;
+
+for i = 1:numGroups
     idx = strcmp(grps, uniqueGroups{i});
-    bc = boxchart(i*ones(sum(idx),1), all_sets(idx), 'BoxWidth', .7);
-    bc.BoxFaceColor = colors(i,:);
-    bc.LineWidth = 1.2;
+    bc = boxchart(positions(i)*ones(sum(idx),1), all_sets(idx), 'BoxWidth',0.7);
+    bc.BoxFaceColor = lighterColors(i,:);
+    bc.LineWidth = 1.5; bc.MarkerColor = lighterColors(i,:);
 end
-scatter(ones(size(diff_vec_class))*1 + randn(size(diff_vec_class))*0.05, diff_vec_class, 16, colors(1,:), 'filled', 'MarkerFaceAlpha', 0.2);
-scatter(ones(size(diff_vec_PRank))*2 + randn(size(diff_vec_PRank))*0.05, diff_vec_PRank, 16, colors(2,:), 'filled', 'MarkerFaceAlpha', 0.2);
-set(gca, 'XTick', [1 2], 'XTickLabel', uniqueGroups);
-ylabel('Normalised Centrality Difference'); box off;
 
-% Euclidean norms
-EN_PR = norm(Local_sorted - PR_sorted, 2);
-EN_class = norm(Local_sorted - Class_sorted, 2);
-fprintf('Euclidean norm (Local - PageRank): %.4f\n', EN_PR);
-fprintf('Euclidean norm (Local - Class): %.4f\n', EN_class);
+[~,~,ic] = unique(grps,'stable');
+for i = 1:numGroups
+    Ind = find(ic==i);
+    scatter(positions(i)+randn(size(Ind))*0.1, all_sets(Ind), 25, colors(i,:), 'filled', ...
+        'MarkerFaceAlpha',0.2,'MarkerEdgeAlpha',0.3);
+end
 
-fprintf('\n--- Analysis complete. ---\n');
+ylabel('Normalised Centrality Difference');
+set(gca,'XTick',positions,'XTickLabel',uniqueGroups); grid off;
+
+%% Nuanced correlation analysis: split by dominance
+fprintf('\n--- Computing class-wise correlation matrices with dominance split ---\n');
+
+centralityNames = { ...
+    'Global', ...
+    'Local (i=5)', ...
+    'Local (i=10)', ...
+    'PageRank', ...
+    'KCEC'};
+
+centralityAll = [ ...
+    EC, ...
+    LEC_5(:), ...
+    LEC_10(:), ...
+    PRank_centrality(:), ...
+    KCEC(:)];
+
+classNames = string(fieldnames(nodeIDs_class));
+numMeasures = size(centralityAll,2);
+
+% Containers for the three conditions
+Corr_All   = struct();
+Corr_HighC = struct();  % KCEC > LEC_10
+Corr_LowC  = struct();  % KCEC <= LEC_10
+
+for k = 1:numel(classNames)
+
+    cname = classNames(k);
+    classNodeIDs = nodeIDs_class.(cname);
+
+    % Map to dense indices
+    [~, idxDense] = ismember(classNodeIDs, nodeIDs_nonzero);
+    idxDense = idxDense(idxDense > 0);
+
+    if numel(idxDense) < 3
+        warning('Skipping class %s (too few nodes).', cname);
+        continue;
+    end
+
+    % Extract data
+    C = centralityAll(idxDense, :);
+    ordC = KCEC(idxDense);
+    locC = LEC_10(idxDense);
+
+    % --- Masks
+    maskHigh = ordC > locC;
+    maskLow  = ~maskHigh;
+
+    % --- All nodes
+    Corr_All.(cname) = corr(C, 'Rows','pairwise');
+
+    % --- High KCEC set
+    if sum(maskHigh) > 0
+        Corr_HighC.(cname) = corr(C(maskHigh,:), 'Rows','pairwise');
+    end
+
+    % --- Low KCEC set
+    if sum(maskLow) > 0
+        Corr_LowC.(cname) = corr(C(maskLow,:), 'Rows','pairwise');
+    end
+
+    fprintf('%s: %d total | %d high-ordered | %d low-ordered\n', ...
+        cname, numel(idxDense), sum(maskHigh), sum(maskLow));
+end
+
+% --- Masks
+% maskHigh = KCEC > LEC_10;
+% maskLow  = ~maskHigh;
+
+% %% Plot all three correlation conditions
+% plot_corr_subplots(Corr_All,   centralityNames, ...
+%     'Centrality Correlations – All Nodes');
+% 
+% plot_corr_subplots(Corr_HighC, centralityNames, ...
+%     'Centrality Correlations – per-class Centrality > Local(i=10)');
+% 
+% plot_corr_subplots(Corr_LowC,  centralityNames, ...
+%     'Centrality Correlations – per-class Centrality < Local(i=10)');
+
+%% Normalise
+% KCEC_norm = (KCEC - median(KCEC)) / mad(KCEC, 1);
+
+% Compute the difference
+diffC = abs(KCEC_norm - LEC_norm);
+
+% Determine threshold for top 50%
+thresh = prctile(diffC, 0);   % 50th percentile
+
+% Mask nodes with top 50% largest differences
+maskTop = diffC >= thresh;
+
+% Further split into High vs Low KCEC
+maskHigh = maskTop & (KCEC_norm > LEC_norm);
+maskLow  = maskTop & (KCEC_norm <= LEC_norm);
+
+C = centralityAll;
+% C(:,3) = [];   % remove Local (i=5) column
+Corr_1 = corr(C, 'Rows','pairwise');
+Corr_1_HighC = corr(C(maskHigh,:), 'Rows','pairwise');
+Corr_1_LowC = corr(C(maskLow,:), 'Rows','pairwise');
+
+Corr_Global = struct();
+Corr_Global.All = Corr_1 + diag(NaN(size(Corr_1_HighC,1),1));
+Corr_Global.Community_centric = Corr_1_HighC + diag(NaN(size(Corr_1_HighC,1),1));
+Corr_Global.Global_centric  = Corr_1_LowC + diag(NaN(size(Corr_1_LowC,1),1));
+centralityShortlist = { ...
+    'Global', ...
+    'Local (i=10)', ...
+    'PageRank', ...
+    'KCEC'};
+
+plot_corr_allplots( ...
+    Corr_Global, ...
+    centralityShortlist, ...
+    'Global Centrality Correlations');
+
+% create a boxchart 
+boxplot_comparison(EC,maskHigh,maskLow,"Global")
+boxplot_comparison(KCEC,maskHigh,maskLow,"Class")
+
+% Correlation analysis 
+LEC_diff = LEC_norm - KCEC_norm;
+EC_diff = EC_norm - KCEC_norm;
+PR_diff = PR_norm - KCEC_norm;
+
+% Assess correlations between diff vectors
+EC_corr = corr(LEC_diff,EC_diff,'Type','Spearman');
+PR_corr = corr(LEC_diff,PR_diff,'Type','Spearman');
 
 %% ----------------------
 % Local helper functions
 %% ----------------------
+function [] = area_plot(metricA,metricB,metric1,metric2,nameA,nameB,name1,name2)
+    x = (1:length(metric1))';
+    figure;
+    
+    % --- Area between Local and PR ---
+    t = tiledlayout(1,9, 'TileSpacing', 'compact', 'Padding', 'compact');
+    
+    % Difference area plots on left
+    nexttile(1,[1 6]); hold on;
+    X_fill = [x; flipud(x)];
+    Y_fill = [metricA; flipud(metricB)];
+    fill(X_fill, Y_fill, [0 0.4470 0.7410], 'FaceAlpha',0.3,'EdgeColor','none');
+    
+    % --- Area between ---
+    Y_fill = [metric1; flipud(metric2)];
+    fill(X_fill, Y_fill, [0.8500 0.3250 0.0980], 'FaceAlpha',0.3,'EdgeColor','none');
+    
+    legend(""+nameA+" − "+nameB+" area", ""+name1+" − "+name2+" area",'Location','northwest');
+    ylabel('Normalised Centrality'); xlabel('Sorted Index'); grid off; 
+    % xlim([0 120]);
+end
+
+function boxplot_comparison(metric,maskHigh,maskLow,nametitle)
+    % create a boxchart of Global centrality
+    yHigh = metric(maskHigh);
+    yLow  = metric(maskLow);
+    
+    y = [yHigh; yLow];
+    g = [repmat("Community-centric", numel(yHigh), 1); repmat("Globally-connected",  numel(yLow),  1)];
+    g = categorical(g);    % optional
+
+    % Perform a statistical test to compare the two distributions
+    [h, p] = ttest2(yHigh, yLow);
+    fprintf('Comparison between %s: t-test p-value = %.6f\n', nametitle, p);
+    
+    figure;
+    boxchart(g, y)
+    ylabel(nametitle)
+end
+
+function plot_corr_subplots(CorrStruct, centralityNames, figTitle)
+
+    classFields = fieldnames(CorrStruct);
+    nClass = numel(classFields);
+    nMeasures = numel(centralityNames);
+
+    nCols = ceil(sqrt(nClass));
+    nRows = ceil(nClass / nCols);
+
+    figure('Units','normalized','Position',[0.05 0.05 0.85 0.8]);
+    tiledlayout(nRows, nCols, 'TileSpacing','compact', 'Padding','compact');
+
+    for k = 1:nClass
+        cname = classFields{k};
+        R = CorrStruct.(cname);
+
+        nexttile;
+        imagesc(R);
+        axis square;
+        caxis([0.5 1]);
+        colormap(flipud(autumn));
+
+        title(strrep(cname,'_',' '), 'Interpreter','none');
+
+        set(gca, ...
+            'XTick', 1:nMeasures, ...
+            'YTick', 1:nMeasures, ...
+            'XTickLabel', centralityNames, ...
+            'YTickLabel', centralityNames, ...
+            'XTickLabelRotation', 45, ...
+            'FontSize', 9);
+
+        if mod(k-1, nCols) ~= 0
+            set(gca, 'YTickLabel', []);
+        end
+        if k <= (nRows-1)*nCols
+            set(gca, 'XTickLabel', []);
+        end
+    end
+
+    cb = colorbar;
+    cb.Layout.Tile = 'east';
+    cb.Label.String = 'Correlation coefficient';
+
+    sgtitle(figTitle, 'FontWeight','bold');
+end
+
+function plot_corr_allplots(CorrStruct, centralityNames, figTitle)
+% Plots exactly two correlation matrices (e.g. High vs Low dominance)
+
+    setNames = fieldnames(CorrStruct);
+    nSets = numel(setNames);
+    assert(nSets == 3, 'CorrStruct must contain exactly three fields.');
+
+    nMeasures = numel(centralityNames);
+
+    figure('Units','normalized','Position',[0.15 0.25 0.7 0.45]);
+    tiledlayout(1, 3, 'TileSpacing','compact', 'Padding','compact');
+
+    % Build colormap (blue -> white -> red)
+    n = 256;
+    n1 = floor(n/2);
+    blue = [59, 76,192]/255;   % tweak colors if desired
+    red  = [180,  4, 38]/255;
+    white = [1 1 1];
+
+    cmap = [
+        interp1([0 1],[blue;white], linspace(0,1,n1), 'linear');
+        interp1([0 1],[white;red],  linspace(0,1,n-n1), 'linear')
+    ];
+
+    for k = 1:3
+        setName = setNames{k};
+        R = CorrStruct.(setName);
+
+        nexttile;
+        h = imagesc(R);
+        axis square;
+        caxis([-1 1]);              % preserve your chosen range
+        colormap(cmap)
+
+        % ---- mask NaNs ----
+        h.AlphaData = ~isnan(R);      % NaNs become transparent
+        set(gca, 'Color', [1 1 1]);   % background color for NaNs
+
+        title(strrep(setName,'_','-'), 'Interpreter','none');
+
+        set(gca, ...
+            'XTick', 1:nMeasures, ...
+            'YTick', 1:nMeasures, ...
+            'XTickLabel', centralityNames, ...
+            'YTickLabel', centralityNames, ...
+            'XTickLabelRotation', 45, ...
+            'FontSize', 10);
+    end
+
+    % Shared colorbar
+    cb = colorbar;
+    cb.Layout.Tile = 'east';
+    cb.Label.String = 'Correlation coefficient';
+
+    sgtitle(figTitle, 'FontWeight','bold');
+end
+
 
 function [A_sparse, A_dense, nodeIDs_nonzero] = gexf_to_adjacency(filename)
 % Reads a GEXF file and returns sparse adjacency (all nodes) and dense
@@ -317,115 +614,7 @@ function [A_class, nodeIDs_class] = gexf_to_class_adjacency(filename)
     fprintf('Created adjacency matrices for %d classes.\n', numel(fieldnames(A_class)));
 end
 
-function [nodeIDs_out, positions_out] = gexf_create_positions(filename, includeIDs)
-% % gexf_extract_positions
-% % Extracts node class information from a GEXF file and assigns new
-% % 2D positions clustered by year and class.
-% %
-% % Inputs:
-% %   filename   - string, path to GEXF file
-% %   includeIDs - string array or cell array of node IDs to include
-% %
-% % Outputs:
-% %   nodeIDs_out   - M×1 string array of node IDs included
-% %   positions_out - M×3 numeric array of [x, y, z] positions
-% 
-%     % Convert includeIDs to string array if cell
-%     if iscell(includeIDs)
-%         includeIDs = string(includeIDs);
-%     end
-% 
-%     % Read XML
-%     xDoc = xmlread(filename);
-%     nodeList = xDoc.getElementsByTagName('node');
-%     numNodes = nodeList.getLength;
-% 
-%     % Initialize outputs
-%     nodeIDs_out = [];
-%     positions_out = [];
-% 
-%     % Define all possible classes
-%     uniqueClasses = ["1A","1B","2A","2B","3A","3B","4A","4B","5A","5B","Teachers"];
-% 
-%     % Define cluster centers for each class
-%     numYears = 5;
-%     ySpacing = 2; % distance between year clusters
-%     xSpacing = 7;  % distance between A/B classes
-%     centers = containers.Map;
-% 
-%     for y = 1:numYears
-%         centers(uniqueClasses((y-1)*2 + 1)) = [-(xSpacing/2), -((y-1)*ySpacing)];
-%         centers(uniqueClasses((y-1)*2 + 2)) = [(xSpacing/2), -((y-1)*ySpacing)];
-%     end
-%     centers("Teachers") = [0, -(numYears*ySpacing)];
-% 
-%     rng(1); % reproducibility
-% 
-%     % Initialize output variables
-%     nodeIDs_out = {};
-%     positions_out = [];
-%     classes_out = {}; % To store class information
-% 
-%     for i = 0:numNodes-1
-%         nodeElem = nodeList.item(i);
-%         nodeID = string(char(nodeElem.getAttribute('id')));
-% 
-%         % Skip if not in includeIDs
-%         if ~ismember(nodeID, includeIDs)
-%             continue;
-%         end
-% 
-%         % --- Extract class info from attvalue with for="0"
-%         attvalues = nodeElem.getElementsByTagName('attvalue');
-%         nodeClass = "Teachers"; % default fallback
-% 
-%         for j = 0:attvalues.getLength-1
-%             attElem = attvalues.item(j);
-%             attrFor = string(char(attElem.getAttribute('for')));
-%             if attrFor == "0"
-%                 nodeClass = string(char(attElem.getAttribute('value')));
-%                 break;
-%             end
-%         end
-% 
-%         % --- Determine base position
-%         if isKey(centers, nodeClass)
-%             base = centers(nodeClass);
-%         else
-%             base = [0, 0]; % fallback if unknown
-%         end
-% 
-%         % --- Random jitter around base position
-%         jitter = (rand(1,2)-0.5) * 5;  % random jitter in [-1,1]
-%         pos2D = base + [0.9 * jitter(1), 0.25 * jitter(2)];
-%         z = 0;
-% 
-%         % --- Store outputs
-%         nodeIDs_out{end+1,1} = nodeID;
-%         positions_out(end+1,:) = [pos2D, z];
-%         classes_out{end+1,1} = nodeClass; % Store the class
-% 
-%         stringClass = string(positions1.Class);
-%         TMask = stringClass == "Teachers";
-%         TIdx = find(TMask);
-%         Pos(TIdx(1),1:2) = [0,-8];
-%         Pos(TIdx(2),1:2) = [0,-3];
-%         Pos(TIdx(3),1:2) = [0,-5];
-%         Pos(TIdx(4),1:2) = [0,-6];
-%         Pos(TIdx(5),1:2) = [0,-2];
-%         Pos(TIdx(6),1:2) = [0,0];
-%         Pos(TIdx(7),1:2) = [0,-4];
-%         Pos(TIdx(8),1:2) = [0,-8];
-%         Pos(TIdx(9),1:2) = [0,0];
-%         Pos(TIdx(10),1:2) = [0,-2];
-%     end
-% 
-%     % Convert to table for easier filtering
-%     positions_out = table(nodeIDs_out, positions_out(:,1), positions_out(:,2), positions_out(:,3), classes_out, ...
-%                        'VariableNames', {'NodeID', 'X', 'Y', 'Z', 'Class'});
-% 
-%     fprintf('Generated clustered positions for %d nodes.\n', numel(nodeIDs_out));
-% end
+function [nodeIDs_out, positions_out,TIdx] = gexf_create_positions(filename, includeIDs)
 % Extracts node class and assigns clustered 2D positions (with z=0).
 % includeIDs: string array of node IDs to include (order matters).
     if iscell(includeIDs), includeIDs = string(includeIDs); end

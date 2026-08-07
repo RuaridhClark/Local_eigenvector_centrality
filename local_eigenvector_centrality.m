@@ -32,6 +32,9 @@ function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Ima
     [Dsort, idx] = sort(real(diag(D)), 'descend');
     V = V(:, idx);
 
+    % Remove negative eigenvalues
+    Dsort(Dsort<0) = 0;
+
     % Remove zero eigenvalue components
     zero_eig = (Dsort == 0);
     V(:, zero_eig) = 0;
@@ -98,7 +101,9 @@ function plot_local_eigenvector_centrality(details, local_centrality)
     title('Sorted Eigenvalues'); box off;
 
     figure; plot(eigengap, 'k-o');
-    xlabel('i'); ylabel('\lambda_i - \lambda_{i+1}');
+    % xlabel('i'); ylabel('\lambda_i - \lambda_{i+1}');
+    xlabel('$i$', 'Interpreter', 'latex');
+    ylabel('$\lambda_i - \lambda_{i+1}$', 'Interpreter', 'latex');
     title('Eigengap Spectrum'); box off;
 
     % === Plot eigenvectors up to Imax ===
