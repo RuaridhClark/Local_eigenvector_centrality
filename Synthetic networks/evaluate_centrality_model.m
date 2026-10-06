@@ -1,4 +1,4 @@
-function results = visualise_centrality_models()
+function results = evaluate_centrality_model()
 
 clc;
 close all;
@@ -54,7 +54,7 @@ for t = 1:nP
     KCEC = normalize_vec(KCEC);
 
     %% ---- LOCAL EIGENVECTOR ----
-    LEC = local_eigenvector_centrality(A, Pos, true, 6);
+    LEC = local_eigenvector_centrality(A, Pos, false, 6);
     LEC = normalize_vec(LEC);
 
     %% ---- GLOBAL METRICS ----
@@ -113,14 +113,16 @@ for t = 1:nP
     %     plot_centrality_colourvary(A, pcc, Pos, 15);
     %     title('PCC')
     %     axis equal;
-    % elseif t==nP
-    %     plot_centrality_colourvary(A, LEC, Pos, 15);
-    %     title('Local Eigenvector (i=6)')
-    %     axis equal;
-    %     plot_centrality_colourvary(A, pcc, Pos, 15);
-    %     title('PCC')
-    %     axis equal;
-    % end
+    % else
+    % 
+    if t==nP
+        plot_centrality_colourvary(A, LEC, Pos, 15);
+        title('Local Eigenvector (i=6)')
+        axis equal;
+        plot_centrality_colourvary(A, pcc, Pos, 15);
+        title('PCC')
+        axis equal;
+    end
 
     %% ================= EVALUATION =================
 
@@ -331,30 +333,54 @@ function [A, Pos, hubIdx] = build_modular_network( ...
         end
     end
 
+    % %% --- geometry ---
+    % theta = linspace(0,2*pi,nodesPerHub+1)';
+    % theta(end)=[];
+    % 
+    % hubR = 2;
+    % 
+    % hubX = hubR*cos(theta);
+    % hubY = hubR*sin(theta);
+    % 
+    % bigTheta = linspace(0,2*pi,numHubs+1)';
+    % bigTheta(end)=[];
+    % 
+    % bigR = 6;
+    % 
+    % cx = bigR*cos(bigTheta);
+    % cy = bigR*sin(bigTheta);
+    % 
+    % Pos = zeros(totalNodes,2);
+    % 
+    % for h=1:numHubs
+    %     idx = hubIdx{h};
+    %     Pos(idx,1)=hubX+cx(h);
+    %     Pos(idx,2)=hubY+cy(h);
+    % end
+
     %% --- geometry ---
     theta = linspace(0,2*pi,nodesPerHub+1)';
-    theta(end)=[];
-
+    theta(end) = [];
+    
     hubR = 2;
-
     hubX = hubR*cos(theta);
     hubY = hubR*sin(theta);
-
-    bigTheta = linspace(0,2*pi,numHubs+1)';
-    bigTheta(end)=[];
-
-    bigR = 6;
-
-    cx = bigR*cos(bigTheta);
-    cy = bigR*sin(bigTheta);
-
+    
+    % Hub centre positions: 2 rows × 3 columns
+    dx = 5;   % horizontal spacing between hub centres
+    dy = 2.5;   % vertical spacing between hub centres
+    
+    cx = [-dx  0  dx  -dx  0  dx]';
+    cy = [ dy  dy dy  -dy -dy -dy]';
+    
     Pos = zeros(totalNodes,2);
-
-    for h=1:numHubs
+    
+    for h = 1:numHubs
         idx = hubIdx{h};
-        Pos(idx,1)=hubX+cx(h);
-        Pos(idx,2)=hubY+cy(h);
+        Pos(idx,1) = hubX + cx(h);
+        Pos(idx,2) = hubY + cy(h);
     end
+
 end
 
 function polar_method_comparison(method, methodName, colour)
@@ -422,42 +448,6 @@ function polar_method_comparison(method, methodName, colour)
     %        'Location','eastoutside');
 end
 
-% function polar_method_comparison(method, methodName, colour)
-%     % function circular_profile(method, methodName)
-% 
-%     nNodes = 20;
-%     nComm  = 6;
-% 
-%     theta = linspace(0,2*pi,nNodes+1);
-% 
-%     figure
-%     hold on
-% 
-%     % colours = lines(nComm);
-% 
-%     for c = 1:nComm
-% 
-%         idx = (c-1)*nNodes + (1:nNodes);
-% 
-%         r = method(idx);
-%         r = r/max(r);
-% 
-%         r(end+1) = r(1);
-% 
-%         x = r .* cos(theta)';
-%         y = r .* sin(theta)';
-% 
-%         plot(x,y,...
-%              'LineWidth',2,...
-%              'Color',colour)
-%     end
-% 
-%     axis equal
-%     axis off
-% 
-%     title(methodName)
-% end
-
 function plot_centrality_colourvary(A, centrality, X, scaled)
 % Plot graph with marker sizes scaled from centrality. 'scaled' controls maximum marker multiplication.
 
@@ -476,62 +466,6 @@ function plot_centrality_colourvary(A, centrality, X, scaled)
     axis off; box on; grid on;
     % Legend
     hold on;
-end
-
-function plot_centrality_overlap(A, centrality, scaled, colour)
-
-    nBlocks = 6;
-    nNodes  = 20;
-
-    assert(length(centrality)==120,...
-        'Expected centrality vector of length 120');
-
-    % Template graph (first repeated 20-node motif)
-    A20 = A(1:nNodes,1:nNodes);
-    G20 = graph(A20);
-
-    % Circular layout
-    theta = linspace(0,2*pi,nNodes+1)';
-    theta(end) = [];
-
-    X = [cos(theta), sin(theta)];
-
-    figure;
-    hold on;
-
-    % Plot graph once
-    p = plot(G20,...
-        'XData',X(:,1),...
-        'YData',X(:,2),...
-        'NodeLabel',{},...
-        'MarkerSize',1,...
-        'EdgeColor',[0 0 0],...
-        'EdgeAlpha',0.2);
-
-    % colours = lines(nBlocks);
-
-    % Overlay six centrality vectors
-    for b = 1:nBlocks
-
-        idx = (b-1)*nNodes + (1:nNodes);
-
-        c = centrality(idx);
-
-        ms = scale_markers(c,6,35);
-        ms = ms/max(ms)*scaled;
-
-        scatter(X(:,1),X(:,2),ms.^2,...
-            'MarkerFaceColor','none',...
-            'MarkerEdgeColor',colour,...
-            'LineWidth',1.5);
-    end
-
-    axis equal
-    axis off
-
-    legend(compose('Block %d',1:nBlocks),...
-        'Location','eastoutside');
-
 end
 
 

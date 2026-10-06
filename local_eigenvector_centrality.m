@@ -11,7 +11,7 @@ function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Ima
 %   A       - Adjacency matrix (sparse or full)
 %   X       - (optional) Node coordinates [n x 2] for plotting
 %   plotall - (optional) If true, generate plots via helper function
-%   Imax    - (optional) Maximum number of eigenvectors to include
+%   Imax    - (optional) Specified eigengap index
 %
 % Outputs:
 %   centrality - Local eigenvector centrality values
@@ -31,6 +31,8 @@ function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Ima
     % Sort eigenvalues and eigenvectors
     [Dsort, idx] = sort(real(diag(D)), 'descend');
     V = V(:, idx);
+    Ddiag = diag(D);
+    D = diag(Ddiag(idx));
 
     % Remove negative eigenvalues
     Dsort(Dsort<0) = 0;
@@ -38,6 +40,12 @@ function [centrality, details] = local_eigenvector_centrality(A, X, plotall, Ima
     % Remove zero eigenvalue components
     zero_eig = (Dsort == 0);
     V(:, zero_eig) = 0;
+
+    % Identify complex conjugate pairs
+    complexPairs = find(imag(diag(D)) ~= 0);
+    % set complexPairs eigenvectors to real and imag values
+    V(:, complexPairs(mod(complexPairs,2)==0)) = real(V(:, complexPairs(mod(complexPairs,2)==0)));
+    V(:, complexPairs(mod(complexPairs,2)~=0)) = imag(V(:, complexPairs(mod(complexPairs,2)~=0)));
 
     % Compute eigengap
     eigengap = Dsort(1:end-1) - Dsort(2:end);

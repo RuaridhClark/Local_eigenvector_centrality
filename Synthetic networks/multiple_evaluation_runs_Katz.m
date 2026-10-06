@@ -14,17 +14,20 @@ nSeeds      = length(seedList);
 
 %% ================= STORAGE =================
 
-fpList = [0.01 0.05:0.05:1.0];
+fpList = [0.01 0.05:0.05:0.95 0.99];
 nFP = length(fpList);
 
 corr_local = zeros(nP,nSeeds);
 corr_pr    = zeros(nP,nSeeds,nFP);
+corr_Katz  = zeros(nP,nSeeds,nFP);
 
 sym_local = zeros(nP,nSeeds);
 sym_pr = zeros(nP,nSeeds,nFP);
+sym_Katz = zeros(nP,nSeeds,nFP);
 
 std_local = zeros(nodesPerHub,1);
 std_pr = zeros(nodesPerHub,nFP);
+std_Katz = zeros(nodesPerHub,nFP);
 
 %% ================= MAIN SWEEP =================
 
@@ -43,17 +46,13 @@ for t = 1:nP
             nInter, ...
             seed);
 
-        interDeg = count_additional_edges(A,nodesPerHub,numHubs,hubIdx);
-
-        rowSum = sum(A, 2);
-        A = A ./ rowSum;
-        A(rowSum == 0, :) = 0;  
+        interDeg = count_additional_edges(A,nodesPerHub,numHubs,hubIdx); 
 
         G = digraph(A);
 
         totalNodes = size(A,1);
 
-        normalize_vec = @(x) x(:)./max(x);
+        normalize_vec = @(x) x(:)./sum(x);
 
         %% -------- KCEC --------
 
@@ -81,13 +80,15 @@ for t = 1:nP
 
         DG = digraph(A);
 
-        prAll = zeros(totalNodes,nFP);
-        
+        Katz = zeros(totalNodes,nFP);
+        lambda_max = max(abs(eigs(sparse(A),1)));
+
         for fpIdx = 1:nFP
-            fp = fpList(fpIdx);
-            prAll(:,fpIdx) = normalize_vec( ...
-                centrality(DG,'pagerank', ...
-                'FollowProbability',fp));
+
+            alpha = fpList(fpIdx)/lambda_max;
+
+            Katz(:,fpIdx) = normalize_vec( ...
+                (speye(totalNodes)-alpha*A)\ones(totalNodes,1));
         end
 
         %% -------- CORRELATION --------
@@ -96,9 +97,9 @@ for t = 1:nP
         corr_local(t,s) = C(1,2);
         
         for fpIdx = 1:nFP
-        
-            C = corrcoef(KCEC,prAll(:,fpIdx));
-            corr_pr(t,s,fpIdx) = C(1,2);
+
+            C = corrcoef(KCEC,Katz(:,fpIdx));
+            corr_Katz(t,s,fpIdx) = C(1,2);
         
         end
 
@@ -108,7 +109,7 @@ for t = 1:nP
 
             L = zeros(numHubs,1);
         
-            P = zeros(numHubs,nFP);
+            P_Katz = zeros(numHubs,nFP);
         
             for h = 1:numHubs
         
@@ -117,7 +118,7 @@ for t = 1:nP
                 L(h) = LEC(idx);
         
                 for fpIdx = 1:nFP
-                    P(h,fpIdx) = prAll(idx,fpIdx);
+                    P_Katz(h,fpIdx) = Katz(idx,fpIdx);
                 end
         
             end
@@ -125,7 +126,7 @@ for t = 1:nP
             std_local(k) = std(L);
         
             for fpIdx = 1:nFP
-                std_pr(k,fpIdx) = std(P(:,fpIdx));
+                std_Katz(k,fpIdx) = std(P_Katz(:,fpIdx));
             end
         
         end
@@ -133,7 +134,7 @@ for t = 1:nP
         sym_local(t,s) = mean(std_local);
         
         for fpIdx = 1:nFP
-            sym_pr(t,s,fpIdx) = mean(std_pr(:,fpIdx));
+            sym_Katz(t,s,fpIdx) = mean(std_Katz(:,fpIdx));
         end
 
 
@@ -146,20 +147,14 @@ end
 corr_local_mu = mean(corr_local,2);
 corr_local_sd = std(corr_local,0,2);
 
-corr_pr_mu = squeeze(mean(corr_pr,2));
-corr_pr_sd = squeeze(std(corr_pr,0,2));
-
-muEC   = mean(r_EC  ,2);
-muPR   = mean(r_PR  ,2);
-
-sdEC   = std(r_EC  ,0,2);
-sdPR   = std(r_PR  ,0,2);
+corr_Katz_mu = squeeze(mean(corr_Katz,2));
+corr_Katz_sd = squeeze(std(corr_Katz,0,2));
 
 sym_local_mu = mean(sym_local,2);
 sym_local_sd = std(sym_local,0,2);
 
-sym_pr_mu = squeeze(mean(sym_pr,2));
-sym_pr_sd = squeeze(std(sym_pr,0,2));
+sym_Katz_mu = squeeze(mean(sym_Katz,2));
+sym_Katz_sd = squeeze(std(sym_Katz,0,2));
 
 %% ================= CORRELATION PLOT =================
 
@@ -177,12 +172,12 @@ shaded_line( ...
     cols(1,:), ...
     0.2);
 
-%% --- PR shaded line ---
+%% --- Katz shaded line ---
 shaded_line( ...
     nInterList,...
-    corr_pr_mu(:,1:nFP),...
-    corr_pr_sd(:,1:nFP),...
-    cols(4,:), ...
+    corr_Katz_mu(:,1:nFP),...
+    corr_Katz_sd(:,1:nFP),...
+    cols(3,:), ...
     0.05);
 
 %% --- Individual PR curves ---
@@ -191,8 +186,8 @@ for fpIdx = 1:nFP
 
     plot( ...
         nInterList,...
-        corr_pr_mu(:,fpIdx),...
-        'Color',cols(4,:),...
+        corr_Katz_mu(:,fpIdx),...
+        'Color',cols(3,:),...
         'LineWidth',1);
 
 end
@@ -223,14 +218,13 @@ for fpIdx = labelIdx
 
     text( ...
         nInterList(end)+0.08,...
-        corr_pr_mu(end,fpIdx),...
+        corr_Katz_mu(end,fpIdx),...
         sprintf('%.2f',fpList(fpIdx)),...
-        'Color',cols(4,:),...
-        'FontWeight','bold');
+        'Color',cols(3,:));
 end
 
-xlabel('No. of inter-community connections','FontSize',12)
-ylabel('Correlation with KCEC','FontSize',12)
+xlabel('No. of inter-community connections','FontSize',14)
+ylabel('Correlation with KCEC','FontSize',14)
 
 xlim([min(nInterList) max(nInterList)+0.8])
 
@@ -251,23 +245,11 @@ figure;
 hold on
 
 
-
-% %% --- PR envelope (all FollowProbability values) ---
-% 
-% prMin = min(sym_pr_mu,[],2);
-% prMax = max(sym_pr_mu,[],2);
-% 
-% fill([nInterList fliplr(nInterList)], ...
-%      [prMin' fliplr(prMax')], ...
-%      cols(4,:), ...
-%      'FaceAlpha',0.05, ...
-%      'EdgeColor','none');
-
 %% --- PR shaded line ---
 shaded_line( ...
     nInterList,...
-    sym_pr_mu(:,1:nFP),...
-    sym_pr_sd(:,1:nFP),...
+    sym_Katz_mu(:,1:nFP),...
+    sym_Katz_sd(:,1:nFP),...
     cols(4,:), ...
     0.1);
 
@@ -277,7 +259,7 @@ for fpIdx = 1:nFP
 
     plot( ...
         nInterList,...
-        sym_pr_mu(:,fpIdx),...
+        sym_Katz_mu(:,fpIdx),...
         'Color',cols(4,:),...
         'LineWidth',1);
 
@@ -300,15 +282,14 @@ for fpIdx = labelIdx
 
     text( ...
         nInterList(end)+0.08,...
-        sym_pr_mu(end,fpIdx),...
+        sym_Katz_mu(end,fpIdx),...
         sprintf('%.2f',fpList(fpIdx)),...
-        'Color',cols(4,:),...
-        'FontWeight','bold');
+        'Color',cols(4,:));
 
 end
 
-xlabel('No. of inter-hub connections','FontSize',12)
-ylabel('Node centrality variation','FontSize',12)
+xlabel('No. of inter-community connections','FontSize',14)
+ylabel('Community node variation','FontSize',14)
 
 xlim([min(nInterList) max(nInterList)+0.8])
 
@@ -318,7 +299,7 @@ grid on
 box on
 
 axis tight
-ylim([0 0.15])
+ylim([0 0.003])
 % %% ================= BOXPLOTS =================
 % 
 % figure

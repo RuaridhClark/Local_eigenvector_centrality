@@ -1,4 +1,4 @@
-function results = evaluate_centrality_model()
+function results = visualise_centrality_models()
 
 clc;
 close all;
@@ -11,12 +11,14 @@ pInternal   = 0.15;
 nInterList  = linspace(1,5,5);   % sweep inter-hub density
 
 nP = length(nInterList);
+comm = repelem((1:6)',20);
 
 %% ================= STORAGE =================
 corr_local   = zeros(nP,1);
 corr_global  = zeros(nP,1);
 corr_katz    = zeros(nP,1);
 corr_pr      = zeros(nP,1);
+corr_ks      = zeros(nP,1);
 
 spearman_local  = zeros(nP,1);
 rmse_local      = zeros(nP,1);
@@ -26,6 +28,7 @@ symmetry_local  = zeros(nP,1);
 symmetry_global = zeros(nP,1);
 symmetry_katz   = zeros(nP,1);
 symmetry_pr     = zeros(nP,1);
+symmetry_ks     = zeros(nP,1);
 
 %% ================= MAIN SWEEP =================
 for t = 1:nP
@@ -54,7 +57,7 @@ for t = 1:nP
     KCEC = normalize_vec(KCEC);
 
     %% ---- LOCAL EIGENVECTOR ----
-    LEC = local_eigenvector_centrality(A, Pos, true, 6);
+    LEC = local_eigenvector_centrality(A, Pos, false, 6);
     LEC = normalize_vec(LEC);
 
     %% ---- GLOBAL METRICS ----
@@ -70,6 +73,8 @@ for t = 1:nP
     [pcc] = principal_component_centrality(A);
     pcc = normalize_vec(pcc);
 
+    kc = normalize_vec(kshellCommunity(A,comm,0.5));
+
     if t==nP
         % polar_method_comparison(methods, methodNames)
         polar_method_comparison(KCEC, "KCEC", 'b')
@@ -78,6 +83,7 @@ for t = 1:nP
         polar_method_comparison(pagerank_c, "PageRank", 'g')
         polar_method_comparison(pcc, "PCC", 'g')
         polar_method_comparison(katz_c, "Katz", 'g')
+        polar_method_comparison(kc, "K-shell", 'g')
     end
 
     % if t==nP
@@ -106,16 +112,14 @@ for t = 1:nP
     %     axis equal;
     % end
 
-    % if t ==1
-    %     plot_centrality_colourvary(A, LEC, Pos, 15);
-    %     title('Local Eigenvector (i=6)')
-    %     axis equal;
-    %     plot_centrality_colourvary(A, pcc, Pos, 15);
-    %     title('PCC')
-    %     axis equal;
-    % else
-    % 
-    if t==nP
+    if t ==1
+        plot_centrality_colourvary(A, LEC, Pos, 15);
+        title('Local Eigenvector (i=6)')
+        axis equal;
+        plot_centrality_colourvary(A, pcc, Pos, 15);
+        title('PCC')
+        axis equal;
+    elseif t==nP
         plot_centrality_colourvary(A, LEC, Pos, 15);
         title('Local Eigenvector (i=6)')
         axis equal;
@@ -333,54 +337,30 @@ function [A, Pos, hubIdx] = build_modular_network( ...
         end
     end
 
-    % %% --- geometry ---
-    % theta = linspace(0,2*pi,nodesPerHub+1)';
-    % theta(end)=[];
-    % 
-    % hubR = 2;
-    % 
-    % hubX = hubR*cos(theta);
-    % hubY = hubR*sin(theta);
-    % 
-    % bigTheta = linspace(0,2*pi,numHubs+1)';
-    % bigTheta(end)=[];
-    % 
-    % bigR = 6;
-    % 
-    % cx = bigR*cos(bigTheta);
-    % cy = bigR*sin(bigTheta);
-    % 
-    % Pos = zeros(totalNodes,2);
-    % 
-    % for h=1:numHubs
-    %     idx = hubIdx{h};
-    %     Pos(idx,1)=hubX+cx(h);
-    %     Pos(idx,2)=hubY+cy(h);
-    % end
-
     %% --- geometry ---
     theta = linspace(0,2*pi,nodesPerHub+1)';
-    theta(end) = [];
-    
+    theta(end)=[];
+
     hubR = 2;
+
     hubX = hubR*cos(theta);
     hubY = hubR*sin(theta);
-    
-    % Hub centre positions: 2 rows × 3 columns
-    dx = 5;   % horizontal spacing between hub centres
-    dy = 2.5;   % vertical spacing between hub centres
-    
-    cx = [-dx  0  dx  -dx  0  dx]';
-    cy = [ dy  dy dy  -dy -dy -dy]';
-    
-    Pos = zeros(totalNodes,2);
-    
-    for h = 1:numHubs
-        idx = hubIdx{h};
-        Pos(idx,1) = hubX + cx(h);
-        Pos(idx,2) = hubY + cy(h);
-    end
 
+    bigTheta = linspace(0,2*pi,numHubs+1)';
+    bigTheta(end)=[];
+
+    bigR = 6;
+
+    cx = bigR*cos(bigTheta);
+    cy = bigR*sin(bigTheta);
+
+    Pos = zeros(totalNodes,2);
+
+    for h=1:numHubs
+        idx = hubIdx{h};
+        Pos(idx,1)=hubX+cx(h);
+        Pos(idx,2)=hubY+cy(h);
+    end
 end
 
 function polar_method_comparison(method, methodName, colour)
@@ -448,6 +428,42 @@ function polar_method_comparison(method, methodName, colour)
     %        'Location','eastoutside');
 end
 
+% function polar_method_comparison(method, methodName, colour)
+%     % function circular_profile(method, methodName)
+% 
+%     nNodes = 20;
+%     nComm  = 6;
+% 
+%     theta = linspace(0,2*pi,nNodes+1);
+% 
+%     figure
+%     hold on
+% 
+%     % colours = lines(nComm);
+% 
+%     for c = 1:nComm
+% 
+%         idx = (c-1)*nNodes + (1:nNodes);
+% 
+%         r = method(idx);
+%         r = r/max(r);
+% 
+%         r(end+1) = r(1);
+% 
+%         x = r .* cos(theta)';
+%         y = r .* sin(theta)';
+% 
+%         plot(x,y,...
+%              'LineWidth',2,...
+%              'Color',colour)
+%     end
+% 
+%     axis equal
+%     axis off
+% 
+%     title(methodName)
+% end
+
 function plot_centrality_colourvary(A, centrality, X, scaled)
 % Plot graph with marker sizes scaled from centrality. 'scaled' controls maximum marker multiplication.
 
@@ -466,6 +482,62 @@ function plot_centrality_colourvary(A, centrality, X, scaled)
     axis off; box on; grid on;
     % Legend
     hold on;
+end
+
+function plot_centrality_overlap(A, centrality, scaled, colour)
+
+    nBlocks = 6;
+    nNodes  = 20;
+
+    assert(length(centrality)==120,...
+        'Expected centrality vector of length 120');
+
+    % Template graph (first repeated 20-node motif)
+    A20 = A(1:nNodes,1:nNodes);
+    G20 = graph(A20);
+
+    % Circular layout
+    theta = linspace(0,2*pi,nNodes+1)';
+    theta(end) = [];
+
+    X = [cos(theta), sin(theta)];
+
+    figure;
+    hold on;
+
+    % Plot graph once
+    p = plot(G20,...
+        'XData',X(:,1),...
+        'YData',X(:,2),...
+        'NodeLabel',{},...
+        'MarkerSize',1,...
+        'EdgeColor',[0 0 0],...
+        'EdgeAlpha',0.2);
+
+    % colours = lines(nBlocks);
+
+    % Overlay six centrality vectors
+    for b = 1:nBlocks
+
+        idx = (b-1)*nNodes + (1:nNodes);
+
+        c = centrality(idx);
+
+        ms = scale_markers(c,6,35);
+        ms = ms/max(ms)*scaled;
+
+        scatter(X(:,1),X(:,2),ms.^2,...
+            'MarkerFaceColor','none',...
+            'MarkerEdgeColor',colour,...
+            'LineWidth',1.5);
+    end
+
+    axis equal
+    axis off
+
+    legend(compose('Block %d',1:nBlocks),...
+        'Location','eastoutside');
+
 end
 
 
@@ -566,5 +638,91 @@ function [pcc] = principal_component_centrality(A)
 
     Z = Xp .* lambda_p';     % scale eigenvectors
     pcc = sqrt(sum(Z.^2, 2));
+
+end
+
+function KC = kshellCommunity(A,comm,alpha)
+
+    if nargin < 3
+        alpha = 0.5;
+    end
+    
+    N = size(A,1);
+    
+    % Build intra-community graph
+    Ain = A;
+    
+    for i = 1:N
+        for j = 1:N
+            if comm(i) ~= comm(j)
+                Ain(i,j) = 0;
+            end
+        end
+    end
+    
+    % Build inter-community graph
+    Aout = A;
+    
+    for i = 1:N
+        for j = 1:N
+            if comm(i) == comm(j)
+                Aout(i,j) = 0;
+            end
+        end
+    end
+    
+    % Core numbers
+    ks_in  = coreNumbers(Ain);
+    ks_out = coreNumbers(Aout);
+    
+    % Community k-shell
+    KC = alpha*ks_in + (1-alpha)*(1 + ks_out);
+
+end
+
+function core = coreNumbers(A)
+
+    N = size(A,1);
+    
+    core = zeros(N,1);
+    
+    G = logical(A);
+    
+    remaining = true(N,1);
+    
+    k = 1;
+    
+    while any(remaining)
+    
+        changed = true;
+    
+        while changed
+    
+            changed = false;
+    
+            deg = sum(G,2);
+    
+            remove = remaining & (deg < k);
+    
+            if any(remove)
+    
+                core(remove) = k-1;
+    
+                G(remove,:) = false;
+                G(:,remove) = false;
+    
+                remaining(remove) = false;
+    
+                changed = true;
+    
+            end
+    
+        end
+    
+        k = k + 1;
+    
+    end
+    
+    core(core==0) = k-1;
 
 end

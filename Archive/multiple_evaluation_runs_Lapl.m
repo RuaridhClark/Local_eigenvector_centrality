@@ -31,7 +31,7 @@ r_PR   = zeros(nP,nSeeds);
 
 %% ================= MAIN SWEEP =================
 
-for t = 1:nP
+for t = 5
 
     nInter = nInterList(t);
 
@@ -46,7 +46,8 @@ for t = 1:nP
             nInter, ...
             seed);
 
-        interDeg = count_additional_edges(A,nodesPerHub,numHubs,hubIdx);
+        % Laplacian matrix
+        L = diag(sum(A,2))-A; % Compute the Laplacian matrix
 
         G = graph(A);
 
@@ -62,9 +63,11 @@ for t = 1:nP
 
             idx = hubIdx{h};
 
-            Ahub = A(idx,idx);
+            Acomm = A(idx,idx);
+            Lcomm = sum(Acomm,2)-Acomm;
 
-            KCEC(idx) = centrality(graph(Ahub),'eigenvector');
+            % KCEC(idx) = centrality(graph(Acomm),'eigenvector');
+            KCEC(idx) = local_eigenvector_centrality_Lapl(Lcomm,Pos,false,1);
 
         end
 
@@ -72,12 +75,13 @@ for t = 1:nP
 
         %% -------- LEC --------
 
-        LEC = local_eigenvector_centrality(A,Pos,false,6);
+        LEC = local_eigenvector_centrality_Lapl(-L,Pos,false);
         LEC = normalize_vec(LEC);
 
         %% -------- GLOBALS --------
 
-        ec = normalize_vec(centrality(G,'eigenvector'));
+        % ec = normalize_vec(centrality(G,'eigenvector'));
+        ec = local_eigenvector_centrality(-L,Pos,false,2);
 
         DG = digraph(A);
         pr = normalize_vec( ...
@@ -169,6 +173,8 @@ for t = 1:nP
         sym_pr(t,s)     = mean(std_pr);
         sym_pcc(t,s)    = mean(std_pcc);
 
+        % plot_centrality_colourvary(A, ec, Pos, 15);
+        % plot_centrality_colourvary(A, LEC, Pos, 15);
     end
 
 end
@@ -341,6 +347,38 @@ xticks(1:5)
 
 %% ================= HELPER =================
 
+function plot_centrality_colourvary(A, centrality, X, scaled)
+% Plot graph with marker sizes scaled from centrality. 'scaled' controls maximum marker multiplication.
+
+    G = graph(A);
+
+    % Marker sizing: consistent scaling across networks
+    ms = scale_markers(centrality, 6, 35);
+    ms = ms / max(ms) * scaled;
+
+    figure;
+    if isempty(X)
+        p = plot(G, 'Layout', 'force', 'MarkerSize', ms, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0],'HandleVisibility','off');
+    else
+        p = plot(G, 'XData', X(:,1), 'YData', X(:,2), 'MarkerSize', ms, 'EdgeAlpha', 0.1, 'EdgeColor', [0,0,0],'HandleVisibility','off');
+    end
+    axis off; box on; grid on;
+    % Legend
+    hold on;
+end
+
+function msizes = scale_markers(values, minSize, maxSize)
+% SCALE_MARKERS Linearly scales values to a marker size range [minSize,maxSize].
+    if nargin < 2, minSize = 6; end
+    if nargin < 3, maxSize = 20; end
+    v = abs(values(:));
+    v = v - min(v);
+    if max(v) > 0
+        v = v ./ max(v);
+    end
+    msizes = minSize + v * (maxSize - minSize);
+end
+
 function shaded_line(x,mu,sigma,col)
 
 fill([x fliplr(x)], ...
@@ -430,24 +468,6 @@ function [A, Pos, hubIdx] = build_modular_network( ...
         idx = hubIdx{h};
         Pos(idx,1)=hubX+cx(h);
         Pos(idx,2)=hubY+cy(h);
-    end
-end
-
-function [interDeg] = count_additional_edges(A,nodesPerHub,numHubs,hubIdx)
-    totalNodes = nodesPerHub*numHubs;
-    interDeg = zeros(totalNodes,1);
-    
-    for h = 1:numHubs
-        idx = hubIdx{h};
-    
-        % degree inside hub only
-        degInternal = sum(A(idx,idx),2);
-    
-        % total degree
-        degTotal = sum(A(idx,:),2);
-    
-        % extra inter-hub degree
-        interDeg(idx) = degTotal - degInternal;
     end
 end
 

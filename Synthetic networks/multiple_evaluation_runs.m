@@ -1,9 +1,9 @@
 %% ================= PARAMETERS =================
 clc;
-close all;
+% close all;
 
-nodesPerHub = 20;
-numHubs     = 6;
+nodesPerComm = 20;
+numComms     = 6;
 pInternal   = 0.15;
 
 nInterList  = 1:5;
@@ -39,32 +39,32 @@ for t = 1:nP
 
         seed = seedList(s);
 
-        [A, Pos, hubIdx] = build_modular_network( ...
-            nodesPerHub, ...
-            numHubs, ...
+        [A, Pos, CommIdx] = build_modular_network( ...
+            nodesPerComm, ...
+            numComms, ...
             pInternal, ...
             nInter, ...
             seed);
 
-        interDeg = count_additional_edges(A,nodesPerHub,numHubs,hubIdx);
+        interDeg = count_additional_edges(A,nodesPerComm,numComms,CommIdx);
 
         G = graph(A);
 
         totalNodes = size(A,1);
 
-        normalize_vec = @(x) x(:)./max(x);
+        normalize_vec = @(x) abs(x(:))./sum(abs(x));
 
         %% -------- KCEC --------
 
         KCEC = zeros(totalNodes,1);
 
-        for h = 1:numHubs
+        for h = 1:numComms
 
-            idx = hubIdx{h};
+            idx = CommIdx{h};
 
-            Ahub = A(idx,idx);
+            AComm = A(idx,idx);
 
-            KCEC(idx) = centrality(graph(Ahub),'eigenvector');
+            KCEC(idx) = centrality(graph(AComm),'eigenvector');
 
         end
 
@@ -89,7 +89,7 @@ for t = 1:nP
         alpha = 0.85/lambda_max;
 
         katz = normalize_vec( ...
-            (speye(totalNodes)-alpha*A)\ones(totalNodes,1));
+            (speye(totalNodes)-alpha*A')\ones(totalNodes,1));
 
         pcc = normalize_vec( ...
             principal_component_centrality(A));
@@ -128,23 +128,23 @@ for t = 1:nP
 
         %% -------- SYMMETRY --------
 
-        std_local  = zeros(nodesPerHub,1);
-        std_global = zeros(nodesPerHub,1);
-        std_katz   = zeros(nodesPerHub,1);
-        std_pr     = zeros(nodesPerHub,1);
-        std_pcc    = zeros(nodesPerHub,1);
+        std_local  = zeros(nodesPerComm,1);
+        std_global = zeros(nodesPerComm,1);
+        std_katz   = zeros(nodesPerComm,1);
+        std_pr     = zeros(nodesPerComm,1);
+        std_pcc    = zeros(nodesPerComm,1);
 
-        for k = 1:nodesPerHub
+        for k = 1:nodesPerComm
 
-            L = zeros(numHubs,1);
-            Gv = zeros(numHubs,1);
-            K = zeros(numHubs,1);
-            P = zeros(numHubs,1);
-            PC = zeros(numHubs,1);
+            L = zeros(numComms,1);
+            Gv = zeros(numComms,1);
+            K = zeros(numComms,1);
+            P = zeros(numComms,1);
+            PC = zeros(numComms,1);
 
-            for h = 1:numHubs
+            for h = 1:numComms
 
-                idx = (h-1)*nodesPerHub + k;
+                idx = (h-1)*nodesPerComm + k;
 
                 L(h)  = LEC(idx);
                 Gv(h) = ec(idx);
@@ -217,8 +217,8 @@ shaded_line(nInterList,corr_katz_mu  ,corr_katz_sd  ,cols(3,:));
 shaded_line(nInterList,corr_pr_mu    ,corr_pr_sd    ,cols(4,:));
 shaded_line(nInterList,corr_pcc_mu   ,corr_pcc_sd   ,cols(5,:));
 
-xlabel('No. of inter-community connections','FontSize',12);
-ylabel('Correlation with KCEC','FontSize',12);
+xlabel('No. of inter-community connections','FontSize',14);
+ylabel('Correlation with KCEC','FontSize',14);
 
 % legend({'LEC','','EC','','Katz','','PageRank','','PCC',''},"Location","southoutside","Orientation","horizontal");
 grid on
@@ -234,8 +234,8 @@ shaded_line(nInterList,sym_katz_mu  ,sym_katz_sd  ,cols(3,:));
 shaded_line(nInterList,sym_pr_mu    ,sym_pr_sd    ,cols(4,:));
 shaded_line(nInterList,sym_pcc_mu   ,sym_pcc_sd   ,cols(5,:));
 
-xlabel('No. of inter-hub connections','FontSize',12);
-ylabel('Hub node centrality variation','FontSize',12);
+xlabel('No. of inter-community connections','FontSize',14);
+ylabel('Community node variation','FontSize',14);
 
 % legend({'','LEC','','EC','','Katz','','PageRank','','PCC'},"Location","southoutside","Orientation","horizontal");
 grid on
@@ -308,8 +308,8 @@ hold on
 shaded_line(nInterList,muEC  ,sdEC  ,cols(2,:));
 shaded_line(nInterList,muPR  ,sdPR  ,cols(4,:));
 
-xlabel('No. of inter-community connections','FontSize',12)
-ylabel('KCEC difference correlation','FontSize',12)
+xlabel('No. of inter-community connections','FontSize',14)
+ylabel('KCEC difference correlation','FontSize',14)
 % legend({'LEC','','EC','','Katz','','PR','','PCC',''})
 grid on
 xticks(1:5)
@@ -356,49 +356,49 @@ plot(x,mu,...
 
 end
 
-function [A, Pos, hubIdx] = build_modular_network( ...
-    nodesPerHub, numHubs, pInternal, nInter, seed)
+function [A, Pos, CommIdx] = build_modular_network( ...
+    nodesPerComm, numComms, pInternal, nInter, seed)
 
     % Optional argument
     if nargin >= 5 && ~isempty(seed)
         rng(seed);
     end
 
-    totalNodes = nodesPerHub * numHubs;
+    totalNodes = nodesPerComm * numComms;
 
-    %% --- base connected hub ---
-    baseAdj = zeros(nodesPerHub);
+    %% --- base connected community ---
+    baseAdj = zeros(nodesPerComm);
 
-    perm = randperm(nodesPerHub);
-    for i = 2:nodesPerHub
+    perm = randperm(nodesPerComm);
+    for i = 2:nodesPerComm
         n1 = perm(i);
         n2 = perm(randi(i-1));
         baseAdj(n1,n2)=1;
         baseAdj(n2,n1)=1;
     end
 
-    extra = rand(nodesPerHub) < pInternal;
+    extra = rand(nodesPerComm) < pInternal;
     extra = triu(extra,1);
     extra = extra + extra.';
     baseAdj = baseAdj | extra;
-    baseAdj(1:nodesPerHub+1:end)=0;
+    baseAdj(1:nodesPerComm+1:end)=0;
 
     %% --- replicate ---
     A = zeros(totalNodes);
-    hubIdx = cell(numHubs,1);
+    CommIdx = cell(numComms,1);
 
-    for h = 1:numHubs
-        idx = (h-1)*nodesPerHub + (1:nodesPerHub);
+    for h = 1:numComms
+        idx = (h-1)*nodesPerComm + (1:nodesPerComm);
         A(idx,idx)=baseAdj;
-        hubIdx{h}=idx;
+        CommIdx{h}=idx;
     end
 
-    %% --- inter hub edges ---
+    %% --- inter community edges ---
     for k = 1:nInter
-        for h1=1:numHubs-1
-            for h2=h1+1:numHubs
-                i1 = hubIdx{h1}(randi(nodesPerHub));
-                i2 = hubIdx{h2}(randi(nodesPerHub));
+        for h1=1:numComms-1
+            for h2=h1+1:numComms
+                i1 = CommIdx{h1}(randi(nodesPerComm));
+                i2 = CommIdx{h2}(randi(nodesPerComm));
 
                 A(i1,i2)=1;
                 A(i2,i1)=1;
@@ -407,15 +407,15 @@ function [A, Pos, hubIdx] = build_modular_network( ...
     end
 
     %% --- geometry ---
-    theta = linspace(0,2*pi,nodesPerHub+1)';
+    theta = linspace(0,2*pi,nodesPerComm+1)';
     theta(end)=[];
 
-    hubR = 2;
+    ComR = 2;
 
-    hubX = hubR*cos(theta);
-    hubY = hubR*sin(theta);
+    ComX = ComR*cos(theta);
+    ComY = ComR*sin(theta);
 
-    bigTheta = linspace(0,2*pi,numHubs+1)';
+    bigTheta = linspace(0,2*pi,numComms+1)';
     bigTheta(end)=[];
 
     bigR = 6;
@@ -425,27 +425,27 @@ function [A, Pos, hubIdx] = build_modular_network( ...
 
     Pos = zeros(totalNodes,2);
 
-    for h=1:numHubs
-        idx = hubIdx{h};
-        Pos(idx,1)=hubX+cx(h);
-        Pos(idx,2)=hubY+cy(h);
+    for h=1:numComms
+        idx = CommIdx{h};
+        Pos(idx,1)=ComX+cx(h);
+        Pos(idx,2)=ComY+cy(h);
     end
 end
 
-function [interDeg] = count_additional_edges(A,nodesPerHub,numHubs,hubIdx)
-    totalNodes = nodesPerHub*numHubs;
+function [interDeg] = count_additional_edges(A,nodesPerComm,numComms,CommIdx)
+    totalNodes = nodesPerComm*numComms;
     interDeg = zeros(totalNodes,1);
     
-    for h = 1:numHubs
-        idx = hubIdx{h};
+    for h = 1:numComms
+        idx = CommIdx{h};
     
-        % degree inside hub only
+        % degree inside community only
         degInternal = sum(A(idx,idx),2);
     
         % total degree
         degTotal = sum(A(idx,:),2);
     
-        % extra inter-hub degree
+        % extra inter-community degree
         interDeg(idx) = degTotal - degInternal;
     end
 end

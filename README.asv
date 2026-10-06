@@ -12,7 +12,7 @@ The paper introduces a **new centrality metric** that extends traditional eigenv
 |----------------------------------|-------------|
 | `High School contacts/`           | Example contact networks for a high school |
 | `Primary School contacts/`        | Example contact networks for a primary school |
-| `Synthetic networks/`             | Synthetic network comparisons with other centrality measures |
+| `Synthetic networks/`             | Synthetic network cExample contact networks for a primary school |
 | `local_eigenvector_centrality.m`  | MATLAB function to compute local eigenvector centrality |
 
 **High School contact networks** from:  
