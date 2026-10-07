@@ -2,6 +2,9 @@
 clc;
 close all;
 
+%% --- Add path to helper functions ---
+addpath('../');
+
 nodesPerHub = 20;
 numHubs     = 6;
 pInternal   = 0.15;
@@ -159,7 +162,9 @@ sym_pr_sd = squeeze(std(sym_pr,0,2));
 
 cols = lines(5);
 
-figure;
+%%
+f=figure;
+f.Position = [340 150 800 600];
 hold on
 
 %% --- LEC shaded line ---
@@ -234,13 +239,18 @@ box on
 
 axis tight
 
+ax = gca;
+ax.FontSize = 16;
+
 %% Sym plot
 
 %% ================= SYMMETRY PLOT =================
 
 cols = lines(5);
 
-figure;
+%%
+f=figure;
+f.Position = [340 150 800 600];
 hold on
 
 
@@ -311,29 +321,9 @@ box on
 
 axis tight
 ylim([0 0.003])
-% %% ================= BOXPLOTS =================
-% 
-% figure
-% 
-% for k = 1:nP
-% 
-%     subplot(1,nP,k)
-% 
-%     X = [ ...
-%         corr_local(k,:)' ...
-%         corr_global(k,:)' ...
-%         corr_katz(k,:)' ...
-%         corr_pr(k,:)' ...
-%         corr_pcc(k,:)' ];
-% 
-%     boxplot(X,...
-%         'Labels',{'LEC','EC','Katz','PR','PCC'});
-% 
-%     title(sprintf('nInter=%d',nInterList(k)))
-% 
-%     ylim([0 1])
-% 
-% end
+
+ax = gca;
+ax.FontSize = 16;
 
 %% ================= HELPER =================
 

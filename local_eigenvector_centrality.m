@@ -110,9 +110,12 @@ function plot_local_eigenvector_centrality(details, local_centrality)
 
     figure; plot(eigengap, 'k-o');
     % xlabel('i'); ylabel('\lambda_i - \lambda_{i+1}');
-    xlabel('$i$', 'Interpreter', 'latex');
-    ylabel('$\lambda_i - \lambda_{i+1}$', 'Interpreter', 'latex');
+    xlabel('$i$', 'Interpreter', 'latex', 'FontSize', 16);
+    ylabel('$\lambda_i - \lambda_{i+1}$', 'Interpreter', 'latex', 'FontSize', 16);
     title('Eigengap Spectrum'); box off;
+
+    ax = gca;
+    ax.FontSize = 12;
 
     % === Plot eigenvectors up to Imax ===
     cmax = max(max(V(:, 1:Imax)));

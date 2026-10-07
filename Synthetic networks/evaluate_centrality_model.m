@@ -3,6 +3,9 @@ function results = evaluate_centrality_model()
 clc;
 close all;
 
+%% --- Add path to helper functions ---
+addpath('../');
+
 %% ================= PARAMETERS =================
 nodesPerHub = 20;
 numHubs     = 6;

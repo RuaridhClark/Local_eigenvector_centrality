@@ -1,6 +1,9 @@
 %% ================= PARAMETERS =================
 clc;
-% close all;
+close all;
+
+%% --- Add path to helper functions ---
+addpath('../');
 
 nodesPerComm = 20;
 numComms     = 6;
@@ -117,14 +120,6 @@ for t = 1:nP
         r_EC(t,s) = corr(deltaLEC,deltaEC,'Type','Spearman');
         r_PR(t,s) = corr(deltaLEC,deltaPR,'Type','Spearman');
 
-        % %% Plot detlaLEC against ec
-        % figure;
-        % scatter(deltaEC, deltaLEC, 'filled');
-        % xlabel('Eigenvector Centrality (EC)');
-        % ylabel('Delta Local Eigenvector Centrality (deltaLEC)');
-        % title(sprintf('Delta LEC vs EC for nInter = %d, seed = %d', nInter, seed));
-        % grid on;
-
 
         %% -------- SYMMETRY --------
 
@@ -206,7 +201,8 @@ sdPR   = std(r_PR  ,0,2);
 
 %% ================= CORRELATION PLOT =================
 
-figure;
+f=figure;
+f.Position = [340 150 800 600];
 hold on
 
 cols = lines(5);
@@ -217,15 +213,19 @@ shaded_line(nInterList,corr_katz_mu  ,corr_katz_sd  ,cols(3,:));
 shaded_line(nInterList,corr_pr_mu    ,corr_pr_sd    ,cols(4,:));
 shaded_line(nInterList,corr_pcc_mu   ,corr_pcc_sd   ,cols(5,:));
 
-xlabel('No. of inter-community connections','FontSize',14);
-ylabel('Correlation with KCEC','FontSize',14);
+xlabel('No. of inter-community connections','FontSize',16);
+ylabel('Correlation with KCEC','FontSize',16);
+
+ax = gca;
+ax.FontSize = 14;
 
 % legend({'LEC','','EC','','Katz','','PageRank','','PCC',''},"Location","southoutside","Orientation","horizontal");
 grid on
 
 %% ================= SYMMETRY PLOT =================
 
-figure;
+f=figure;
+f.Position = [340 150 800 600];
 hold on
 
 shaded_line(nInterList,sym_local_mu ,sym_local_sd ,cols(1,:));
@@ -234,14 +234,19 @@ shaded_line(nInterList,sym_katz_mu  ,sym_katz_sd  ,cols(3,:));
 shaded_line(nInterList,sym_pr_mu    ,sym_pr_sd    ,cols(4,:));
 shaded_line(nInterList,sym_pcc_mu   ,sym_pcc_sd   ,cols(5,:));
 
-xlabel('No. of inter-community connections','FontSize',14);
-ylabel('Community node variation','FontSize',14);
+xlabel('No. of inter-community connections','FontSize',16);
+ylabel('Community node variation','FontSize',16);
 
 % legend({'','LEC','','EC','','Katz','','PageRank','','PCC'},"Location","southoutside","Orientation","horizontal");
 grid on
 xticks(1:5)
 
-figure
+ax = gca;
+ax.FontSize = 16;
+
+%%
+f=figure;
+f.Position = [340 150 800 600];
 
 methods = {'LEC','EC','Katz','PR','PCC'};
 
@@ -298,11 +303,15 @@ for k = 1:nP
 
     grid on
 
+    ax = gca;
+    ax.FontSize = 16;
+
 end
 
 %% ============= DISAGREE PLOT ==============
 
-figure
+f=figure;
+f.Position = [340 150 800 600];
 hold on
 
 shaded_line(nInterList,muEC  ,sdEC  ,cols(2,:));
@@ -313,30 +322,6 @@ ylabel('KCEC difference correlation','FontSize',14)
 % legend({'LEC','','EC','','Katz','','PR','','PCC',''})
 grid on
 xticks(1:5)
-
-% %% ================= BOXPLOTS =================
-% 
-% figure
-% 
-% for k = 1:nP
-% 
-%     subplot(1,nP,k)
-% 
-%     X = [ ...
-%         corr_local(k,:)' ...
-%         corr_global(k,:)' ...
-%         corr_katz(k,:)' ...
-%         corr_pr(k,:)' ...
-%         corr_pcc(k,:)' ];
-% 
-%     boxplot(X,...
-%         'Labels',{'LEC','EC','Katz','PR','PCC'});
-% 
-%     title(sprintf('nInter=%d',nInterList(k)))
-% 
-%     ylim([0 1])
-% 
-% end
 
 %% ================= HELPER =================
 

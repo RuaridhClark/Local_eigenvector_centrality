@@ -4,9 +4,6 @@
 % Usage: run this script from its folder. It will load the GEXF file,
 % compute centralities, and produce plots corresponding with the paper.
 
-%%% NEW PLAN %%% Correlate with metrics on the nodes not just between
-%%% centrality measures
-
 %% Configuration
 clear; clc; close all;
 

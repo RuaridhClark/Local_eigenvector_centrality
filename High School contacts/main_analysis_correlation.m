@@ -31,7 +31,7 @@ if length(TIdx)>0
 end
 
 %% --- Compute local eigenvector centrality ---
-global_centrality = local_eigenvector_centrality(A_dense, Pos, false, 1);
+global_centrality = local_eigenvector_centrality(A_dense, Pos, true, 1);
 LEC = local_eigenvector_centrality(A_dense, Pos, false, 5);
 plot_centrality_colourvary(A_dense, LEC, Pos, nodeIDs_nonzero, 15, metafile);
 title('Local (i=5)')
